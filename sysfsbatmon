@@ -1,0 +1,170 @@
+#!/bin/bash
+
+# sysfsbatmon: A simple script to display battery status on screen
+#
+# Author: Dimitris Lampridis <dlampridis_at_gmail.com>
+
+# (C) Copyright 2010 Dimitris Lampridis
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+#-------------------------------------------------------------------------
+# configuration settings below, adjust as necessary
+
+####################
+#  SYSFS SETTINGS  #
+####################
+
+# Set this to your power supply's sysfs path 
+PSUPATH="/sys/class/power_supply"
+
+# Change this to match the string assigned to your battery
+# and ac adapter by sysfs. To find out the available strings, 
+# have a look at the SYSFSPATH subfolder names.
+BTNAME="BAT1"
+ACNAME="ACAD"
+
+####################
+#   OSD SETTINGS   #
+####################
+
+# Font name and size (default = FreeSerif, size 64)
+# Try reducing the size of the OSD is too large for your
+# desktop resolution
+FONT="FreeSerif"
+FONTSIZE="36"
+
+# Character to use for OSD display (default = "|")
+OSDCHAR="|"
+
+# Horizontal scaling factor
+# Try reducing this if the OSD is so long that it continues
+# on a second line (default = 2)
+HORIZSCALE="1"
+
+# OSD position, X and Y (default x=10, y=-10)
+OSDX="10"
+OSDY="-10"
+
+# OSD Fade in/out, in milliseconds (default = 0ms)
+FADEIN="0"
+FADEOUT="0"
+
+#####################
+# PROGRAM LOCATIONS #
+#####################
+
+# Adjust the location of required binaries (if needed)
+# Should be OK for most Linux distributions
+AOSD=/usr/bin/aosd_cat
+AWK=/usr/bin/awk
+GREP=/bin/grep
+ECHO=/bin/echo
+CAT=/bin/cat
+KILLALL=/usr/bin/killall
+TR=/usr/bin/tr
+
+# end of configuration settings, nothing requires changing below this line
+#-------------------------------------------------------------------------
+
+# check that all binaries exist
+for i in $AOSD $AWK $GREP $ECHO $CAT $KILLALL $TR
+do
+    if [ ! -e $i ]; then
+	$ECHO $i" does not exist"
+	$ECHO "please install it if missing, and/or adjust the configuration settings to point to the correct location"
+	exit
+    fi
+done
+
+ACPATH=$PSUPATH/$ACNAME
+ACSTATPATH=$ACPATH/online
+
+for i in $ACPATH $ACSTATPATH
+do
+    if [ ! -e $i ]; then
+	$ECHO $i" does not exist"
+	$ECHO "please adjust script settings"
+	exit
+    else
+	# get AC status
+	ACSTATUS=$($CAT $ACSTATPATH)
+    fi
+done
+
+BTPATH=$PSUPATH/$BTNAME
+BTSTATPATH=$BTPATH/present
+BTPWRNOWPATH=$BTPATH/energy_now
+BTPWRFULPATH=$BTPATH/energy_full
+
+if [ -e $BTPATH ]; then
+    for i in $BTSTATPATH $BTPWRFULPATH $BTPWRNOWPATH
+    do
+	if [ ! -e $i ]; then
+	    $ECHO $i" does not exist"
+	    $ECHO "please adjust script settings"
+	    exit
+	fi
+    done
+
+    # get battery status
+    BTSTATUS=$($CAT $BTSTATPATH)
+    BTPWRNOW=$($CAT $BTPWRNOWPATH)
+    BTPWRFUL=$($CAT $BTPWRFULPATH)
+
+    # determine battery percentage and adjust text color
+    BTPERCENT=$(expr \( 100 \* $BTPWRNOW \) \/ $BTPWRFUL)
+    if [ $BTPERCENT -gt 75 ]; then
+	OSDCOLOR="green"
+    elif [ $BTPERCENT -gt 65 ]; then
+	OSDCOLOR="olivedrab1"
+    elif [ $BTPERCENT -gt 55 ]; then
+	OSDCOLOR="yellow"
+    elif [ $BTPERCENT -gt 45 ]; then
+	OSDCOLOR="gold"
+    elif [ $BTPERCENT -gt 35 ]; then
+	OSDCOLOR="orange"
+    elif [ $BTPERCENT -gt 25 ]; then
+	OSDCOLOR="orangered"
+    else
+	OSDCOLOR="red"
+    fi
+
+    # determine number of characters to draw on the OSD
+    STEPS=$(expr $BTPERCENT \/ $HORIZSCALE)
+
+    # "draw" the OSD characters on a temporary string
+    OSDI=$BTPERCENT"%"
+
+    if [ $ACSTATUS == "1" ]; then
+	OSDI=$OSDI" + "
+    else
+	OSDI=$OSDI" - "
+    fi
+
+    for i in $(seq 1 $STEPS)
+    do
+	OSDI=$OSDI$OSDCHAR
+    done
+    
+else
+    OSDCOLOR="green"
+    OSDI="on AC, no battery present..."
+fi
+
+# kill any existing instances of AOSD_CAT
+$KILLALL aosd_cat &> /dev/null
+
+# Print the temporary string on screen with AOSD_CAT
+$ECHO "$OSDI" | $AOSD -n "$FONT $FONTSIZE" -R $OSDCOLOR -o $FADEOUT -f $FADEIN -x $OSDX -y $OSDY
