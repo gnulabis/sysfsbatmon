@@ -1,0 +1,1 @@
+A simple bash script to display battery status on screen, using "aosd-cat", for minimalistic desktop environments that lack any built-in battery monitor.
