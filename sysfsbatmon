@@ -74,12 +74,15 @@ ECHO=/bin/echo
 CAT=/bin/cat
 KILLALL=/usr/bin/killall
 TR=/usr/bin/tr
+SEQ=/usr/bin/seq
+PRINTF=/usr/bin/printf
+EXPR=/usr/bin/expr
 
 # end of configuration settings, nothing requires changing below this line
 #-------------------------------------------------------------------------
 
 # check that all binaries exist
-for i in $AOSD $AWK $GREP $ECHO $CAT $KILLALL $TR
+for i in $AOSD $AWK $GREP $ECHO $CAT $KILLALL $TR $SEQ $PRINTF $EXPR
 do
     if [ ! -e $i ]; then
 	$ECHO $i" does not exist"
@@ -124,25 +127,20 @@ if [ -e $BTPATH ]; then
     BTPWRFUL=$($CAT $BTPWRFULPATH)
 
     # determine battery percentage and adjust text color
-    BTPERCENT=$(expr \( 100 \* $BTPWRNOW \) \/ $BTPWRFUL)
-    if [ $BTPERCENT -gt 75 ]; then
-	OSDCOLOR="green"
-    elif [ $BTPERCENT -gt 65 ]; then
-	OSDCOLOR="olivedrab1"
-    elif [ $BTPERCENT -gt 55 ]; then
-	OSDCOLOR="yellow"
-    elif [ $BTPERCENT -gt 45 ]; then
-	OSDCOLOR="gold"
-    elif [ $BTPERCENT -gt 35 ]; then
-	OSDCOLOR="orange"
-    elif [ $BTPERCENT -gt 25 ]; then
-	OSDCOLOR="orangered"
-    else
-	OSDCOLOR="red"
-    fi
+    BTPERCENT=$($EXPR \( 100 \* $BTPWRNOW \) \/ $BTPWRFUL)
+
+     if [ $BTPERCENT -ge 50 ]; then
+	 GREEN=255
+	 RED=$($EXPR \( 5 \* \( 100 - $BTPERCENT \) \) )
+     else
+	 RED=255
+	 GREEN=$($EXPR \( 5 \* $BTPERCENT \) )
+     fi
+
+     OSDCOLOR=$($PRINTF "#%.2x%.2x00" $RED $GREEN)
 
     # determine number of characters to draw on the OSD
-    STEPS=$(expr $BTPERCENT \/ $HORIZSCALE)
+    STEPS=$($EXPR $BTPERCENT \/ $HORIZSCALE)
 
     # "draw" the OSD characters on a temporary string
     OSDI=$BTPERCENT"%"
@@ -153,7 +151,7 @@ if [ -e $BTPATH ]; then
 	OSDI=$OSDI" - "
     fi
 
-    for i in $(seq 1 $STEPS)
+    for i in $($SEQ 1 $STEPS)
     do
 	OSDI=$OSDI$OSDCHAR
     done
